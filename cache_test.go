@@ -103,3 +103,50 @@ func TestGetterusing(t *testing.T) {
 	}
 
 }
+
+type err4Test struct {
+}
+
+func (e err4Test) Error() string {
+	return "%%error%%"
+}
+
+func TestErrorreporting(t *testing.T) {
+	cache := Createcache()
+	rakiChaneru := make(chan bool)
+	timestamp := time.Now().Unix()
+	getter := func() (interface{}, error) {
+		if (time.Now().Unix() - timestamp) < 2 {
+			return 0, err4Test{}
+		} else {
+			return 5, nil
+		}
+	}
+	errTester := func() {
+		val, err := cache.Get("key1", getter)
+
+		rakiChaneru <- err.Error() == "%%error%%" && val == 0
+	}
+	for i := 0; i < 4; i++ {
+		go errTester()
+	}
+	for i := 0; i < 4; i++ {
+		go startCaching(cache, 5, 2100, "key1", getter, rakiChaneru)
+	}
+	total := 0
+	success := 0
+	var result bool
+	for total < 8 {
+		result = <-rakiChaneru
+		fmt.Println(result)
+		total++
+		if result {
+			success++
+		}
+	}
+	if success < 8 {
+		fmt.Println("Not all threads goes right", success)
+		t.FailNow()
+	}
+
+}
